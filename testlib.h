@@ -25,7 +25,7 @@
  * Copyright (c) 2005-2020
  */
 
-#define VERSION "0.9.34-SNAPSHOT"
+#define VERSION "0.9.34-SNAPSHOT-MODIFIED-LOCAL-AND-LEMON"
 
 /* 
  * Mike Mirzayanov
@@ -60,6 +60,15 @@
  *   Reads test from inf (mapped to args[1]), writes result to tout (mapped to argv[2],
  *   can be judged by checker later), reads program output from ouf (mapped to stdin),
  *   writes output to program via stdout (use cout, printf, etc).
+ */
+
+/* 
+ *   This is a modified version created by Xiao Mao(matthew99) and Liangzhou Chen(PinkRabbit).
+ *   Checker for local judger is supported.
+ *   You can use variable perfectScore to know the perfect score of the current test case.
+ *   As we know, you can use registerTestlibCmd(argc, argv) to register a checker.
+ *   For local judger, you can use registerLocalChecker(<Input_File>, <Output_File>, <Answer_File>, <Perfect_Score>, <Score_File>[, <Report_File>]).
+ *   For lemon judger, you can simply use registerLemonChecker(argc, argv).
  */
 
 const char *latestFeatures[] = {
@@ -2135,6 +2144,11 @@ random_t rnd;
 TTestlibMode testlibMode = _unknown;
 double __testlib_points = std::numeric_limits<float>::infinity();
 
+int perfectScore;
+FILE *scoreFile;
+bool localJudger;
+double partialScore;
+
 struct ValidatorBoundsHit {
     static const double EPS;
     bool minHit;
@@ -2731,7 +2745,16 @@ NORETURN void InStream::quit(TResult result, const char *msg) {
     if (resultName != "")
         std::fprintf(stderr, "See file to check exit message\n");
 
-    halt(resultExitCode(result));
+    if (localJudger) {
+        if (result == _ok)
+            fprintf(scoreFile, "%d", perfectScore);
+        else if (result == _points)
+            fprintf(scoreFile, "%f", partialScore);
+        else
+            fprintf(scoreFile, "0");
+        exit(0);
+    } else
+        halt(resultExitCode(result));
 }
 
 #ifdef __GNUC__
@@ -3882,10 +3905,15 @@ NORETURN void __testlib_quitp(double points, const char *message) {
     std::string stringPoints = removeDoubleTrailingZeroes(format("%.10f", points));
 
     std::string quitMessage;
-    if (NULL == message || 0 == strlen(message))
-        quitMessage = stringPoints;
-    else
-        quitMessage = stringPoints + " " + message;
+    if (localJudger) {
+        quitMessage = message;
+        partialScore = points;
+    } else {
+        if (NULL == message || 0 == strlen(message))
+            quitMessage = stringPoints;
+        else
+            quitMessage = stringPoints + " " + message;
+    }
 
     quit(_points, quitMessage.c_str());
 }
@@ -4192,6 +4220,27 @@ void registerTestlib(int argc, ...) {
 
     registerTestlibCmd(argc + 1, argv);
     delete[] argv;
+}
+
+void registerLocalChecker(const std::string &_inputFile, const std::string &_outputFile, const std::string &_answerFile, int _perfectScore, const std::string &_scoreFile, const std::string &_reportFile = "") {
+    localJudger = true;
+    __testlib_ensuresPreconditions();
+
+    testlibMode = _checker;
+    __testlib_set_binary(stdin);
+
+    inf.init(_inputFile, _input);
+    ouf.init(_outputFile, _output);
+    ans.init(_answerFile, _answer);
+    perfectScore = _perfectScore;
+    scoreFile = fopen(_scoreFile.c_str(), "w");
+    resultName = _reportFile;
+    appesMode = false;
+}
+
+void registerLemonChecker(int argc, char* argv[]) {
+    if (argc != 7) quit(_fail, "Number of arguments for lemon checkers must be 7.");
+    registerLocalChecker(argv[1], argv[2], argv[3], atoi(argv[4]), argv[5], argv[6]);
 }
 
 static inline void __testlib_ensure(bool cond, const std::string &msg) {
