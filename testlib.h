@@ -3171,7 +3171,7 @@ NORETURN void InStream::quit(TResult result, const char *msg) {
                 errorName = testlib_format_("partially correct (%d) ", pctype);
                 isPartial = true;
                 if (localJudger)
-                    message = format("%d", pctype) + " " + message;
+                    message = testlib_format_("%d", pctype) + " " + message;
                 quitscrS(LightYellow, errorName);
             } else
                 quit(_fail, "What is the code ??? ");
